@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """
 Water bill checker for xpress-pay portal.
-Checks for a due bill and notifies Home Assistant if found.
+Runs daily at 8am and notifies Home Assistant if a bill is found.
 """
 
 import os
 import sys
+import time
+import schedule
 import requests
 from playwright.sync_api import sync_playwright
 
@@ -26,18 +28,20 @@ def notify_ha():
     payload = {
         "title": "Water Bill Due",
         "message": "Your water bill is ready. Tap to pay.",
-        "data": {
-            "url": SEARCH_URL,
-        },
+        "data": {"url": SEARCH_URL},
     }
-    response = requests.post(url, json=payload, headers=headers)
+    response = requests.post(url, json=payload, headers=headers, timeout=10)
     response.raise_for_status()
-    print("Notification sent.", file=sys.stderr)
+    print("Notification sent.", flush=True)
 
 
 def check_bill():
+    print("Checking water bill...", flush=True)
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
+        )
         page = browser.new_page()
 
         try:
@@ -45,7 +49,6 @@ def check_bill():
 
             page.fill('input[name="Bill[locator1]"]', LAST_NAME)
             page.fill('input[name="Bill[locator2]"]', STREET_NAME)
-
             page.evaluate('document.getElementById("bill-atleast1locator").value = "1"')
 
             initial_url = page.url
@@ -56,20 +59,21 @@ def check_bill():
             """)
             page.wait_for_load_state("networkidle")
 
-            final_url = page.url
-
-            if final_url != initial_url:
-                print("BILL_FOUND")
+            if page.url != initial_url:
+                print("BILL_FOUND", flush=True)
                 notify_ha()
             else:
-                print("NO_BILL")
+                print("NO_BILL", flush=True)
 
         except Exception as e:
-            print(f"ERROR: {e}", file=sys.stderr)
-            sys.exit(1)
+            print(f"ERROR: {e}", file=sys.stderr, flush=True)
         finally:
             browser.close()
 
 
 if __name__ == "__main__":
-    check_bill()
+    schedule.every().day.at("08:00").do(check_bill)
+    print("Water bill checker started. Runs daily at 08:00.", flush=True)
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
