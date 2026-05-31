@@ -1,0 +1,1 @@
+0 8 * * * /usr/local/bin/python /app/check_bill.py >> /var/log/water-bill.log 2>&1

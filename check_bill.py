@@ -1,16 +1,38 @@
 #!/usr/bin/env python3
 """
 Water bill checker for xpress-pay portal.
-Exits with code 0 and prints 'NO_BILL' if no bill found.
-Exits with code 1 and prints 'BILL_FOUND' if a bill is found (redirect occurred).
+Checks for a due bill and notifies Home Assistant if found.
 """
 
+import os
 import sys
+import requests
 from playwright.sync_api import sync_playwright
 
 SEARCH_URL = "https://pay.xpress-pay.com/bill/search/e59f5554733c46658a100aa68b08545b"
 LAST_NAME = "MacGregor"
 STREET_NAME = "lakeland"
+
+HA_URL = os.environ.get("HA_URL", "").rstrip("/")
+HA_TOKEN = os.environ.get("HA_TOKEN", "")
+
+
+def notify_ha():
+    url = f"{HA_URL}/api/services/notify/mobile_app_d_s24"
+    headers = {
+        "Authorization": f"Bearer {HA_TOKEN}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "title": "Water Bill Due",
+        "message": "Your water bill is ready. Tap to pay.",
+        "data": {
+            "url": SEARCH_URL,
+        },
+    }
+    response = requests.post(url, json=payload, headers=headers)
+    response.raise_for_status()
+    print("Notification sent.", file=sys.stderr)
 
 
 def check_bill():
@@ -24,13 +46,10 @@ def check_bill():
             page.fill('input[name="Bill[locator1]"]', LAST_NAME)
             page.fill('input[name="Bill[locator2]"]', STREET_NAME)
 
-            # atLeast1Locator is a hidden Yii2 validation flag; set it so the
-            # server accepts the POST (bypassing client-side activeForm check)
             page.evaluate('document.getElementById("bill-atleast1locator").value = "1"')
 
             initial_url = page.url
 
-            # Submit directly to bypass Yii2 activeForm client-side validation
             page.evaluate("""
                 var btn = document.querySelector('button[name="submitLocators"]');
                 (btn.closest('form') || btn.form).submit();
@@ -40,21 +59,16 @@ def check_bill():
             final_url = page.url
 
             if final_url != initial_url:
-                # Redirected to payment page — bill found
                 print("BILL_FOUND")
-                print(f"Payment URL: {final_url}", file=sys.stderr)
-                browser.close()
-                sys.exit(1)
+                notify_ha()
             else:
-                # Server returned to search form — no bill due
                 print("NO_BILL")
-                browser.close()
-                sys.exit(0)
 
         except Exception as e:
             print(f"ERROR: {e}", file=sys.stderr)
+            sys.exit(1)
+        finally:
             browser.close()
-            sys.exit(2)
 
 
 if __name__ == "__main__":
