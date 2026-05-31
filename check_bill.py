@@ -77,8 +77,11 @@ def check_bill():
 
 
 if __name__ == "__main__":
-    schedule.every().day.at("08:00").do(check_bill)
-    log("Water bill checker started. Runs daily at 08:00.")
-    while True:
-        schedule.run_pending()
-        time.sleep(60)
+    if "--once" in sys.argv:
+        check_bill()
+    else:
+        schedule.every().day.at("08:00").do(check_bill)
+        log("Water bill checker started. Runs daily at 08:00.")
+        while True:
+            schedule.run_pending()
+            time.sleep(60)
