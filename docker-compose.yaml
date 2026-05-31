@@ -1,0 +1,8 @@
+services:
+  water-bill-checker:
+    image: ghcr.io/cmacgregor/water-bill-checker:latest
+    container_name: water-bill-checker
+    restart: unless-stopped
+    environment:
+      - HA_URL=https://ha.atthedigitalworld.com
+      - HA_TOKEN=${HA_TOKEN}
