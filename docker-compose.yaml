@@ -4,5 +4,5 @@ services:
     container_name: water-bill-checker
     restart: unless-stopped
     environment:
-      - HA_URL=https://ha.atthedigitalworld.com
+      - HA_URL=${HA_URL}
       - HA_TOKEN=${HA_TOKEN}
