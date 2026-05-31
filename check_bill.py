@@ -77,7 +77,10 @@ def check_bill():
 
 
 if __name__ == "__main__":
-    if "--once" in sys.argv:
+    if "--test-notify" in sys.argv:
+        log("Sending test notification...")
+        notify_ha()
+    elif "--once" in sys.argv:
         check_bill()
     else:
         schedule.every().day.at("08:00").do(check_bill)
