@@ -1,0 +1,45 @@
+# ============================================================
+# Home Assistant Configuration for Water Bill Checker
+# ============================================================
+# Add these to your configuration.yaml (or split into includes)
+# Replace "mobile_app_your_phone" with your actual HA device name
+# (check Settings > Companion App to find yours)
+# ============================================================
+
+
+# ------------------------------------------------------------
+# 1. SHELL COMMAND
+# Runs the Docker container and captures exit code.
+# Add to configuration.yaml under shell_command:
+# ------------------------------------------------------------
+
+shell_command:
+  check_water_bill: >
+    docker run --rm water-bill-checker
+
+
+# ------------------------------------------------------------
+# 2. AUTOMATION
+# Runs daily at 8am. Notifies you only if a bill is found.
+# Add to automations.yaml or via the UI.
+# ------------------------------------------------------------
+
+automation:
+  - alias: "Check Water Bill Daily"
+    description: "Runs the water bill checker each morning and notifies if a bill is due."
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    action:
+      - service: shell_command.check_water_bill
+        response_variable: bill_result
+      - condition: template
+        value_template: "{{ bill_result.returncode == 1 }}"
+      - service: notify.mobile_app_your_phone
+        data:
+          title: "💧 Water Bill Due"
+          message: "Your water bill is ready. Tap to pay."
+          data:
+            url: "https://pay.xpress-pay.com/bill/search/e59f5554733c46658a100aa68b08545b"
+            push:
+              sound: "default"
