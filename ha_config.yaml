@@ -2,8 +2,6 @@
 # Home Assistant Configuration for Water Bill Checker
 # ============================================================
 # Add these to your configuration.yaml (or split into includes)
-# Replace "mobile_app_your_phone" with your actual HA device name
-# (check Settings > Companion App to find yours)
 # ============================================================
 
 
@@ -15,7 +13,7 @@
 
 shell_command:
   check_water_bill: >
-    docker run --rm water-bill-checker
+    docker run --rm ghcr.io/cmacgregor/water-bill-checker:latest
 
 
 # ------------------------------------------------------------
@@ -35,7 +33,7 @@ automation:
         response_variable: bill_result
       - condition: template
         value_template: "{{ bill_result.returncode == 1 }}"
-      - service: notify.mobile_app_your_phone
+      - service: notify.mobile_app_d_s24
         data:
           title: "💧 Water Bill Due"
           message: "Your water bill is ready. Tap to pay."
