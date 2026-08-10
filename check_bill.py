@@ -58,11 +58,11 @@ def check_bill():
 
             initial_url = page.url
 
-            page.evaluate("""
-                var btn = document.querySelector('button[name="submitLocators"]');
-                (btn.closest('form') || btn.form).submit();
-            """)
-            page.wait_for_load_state("networkidle")
+            with page.expect_navigation(wait_until="networkidle"):
+                page.evaluate("""
+                    var btn = document.querySelector('button[name="submitLocators"]');
+                    (btn.closest('form') || btn.form).submit();
+                """)
 
             if page.url != initial_url:
                 log("BILL_FOUND")
