@@ -16,6 +16,10 @@ SEARCH_URL = "https://pay.xpress-pay.com/bill/search/e59f5554733c46658a100aa68b0
 LAST_NAME = "MacGregor"
 STREET_NAME = "lakeland"
 
+PAGE_TIMEOUT_MS = 60_000
+MAX_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 300
+
 HA_URL = os.environ.get("HA_URL", "").rstrip("/")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
 
@@ -41,16 +45,31 @@ def log(msg):
 
 
 def check_bill():
-    log("Checking water bill...")
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        log("Checking water bill..." + (f" (attempt {attempt}/{MAX_ATTEMPTS})" if attempt > 1 else ""))
+        if _check_bill_once():
+            return
+        if attempt < MAX_ATTEMPTS:
+            time.sleep(RETRY_DELAY_SECONDS)
+    log("All attempts failed.")
+
+
+def _check_bill_once():
+    """Returns True if the check completed (bill or no bill), False on error."""
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=True,
             args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
         page = browser.new_page()
+        page.set_default_timeout(PAGE_TIMEOUT_MS)
 
         try:
-            page.goto(SEARCH_URL, wait_until="networkidle")
+            # Don't wait for "networkidle": background requests (analytics,
+            # polling) on the portal can keep the network busy indefinitely.
+            # Wait for the form field we actually need instead.
+            page.goto(SEARCH_URL, wait_until="domcontentloaded")
+            page.wait_for_selector('input[name="Bill[locator1]"]')
 
             page.fill('input[name="Bill[locator1]"]', LAST_NAME)
             page.fill('input[name="Bill[locator2]"]', STREET_NAME)
@@ -58,7 +77,7 @@ def check_bill():
 
             initial_url = page.url
 
-            with page.expect_navigation(wait_until="networkidle"):
+            with page.expect_navigation(wait_until="domcontentloaded"):
                 page.evaluate("""
                     var btn = document.querySelector('button[name="submitLocators"]');
                     (btn.closest('form') || btn.form).submit();
@@ -69,9 +88,11 @@ def check_bill():
                 notify_ha()
             else:
                 log("NO_BILL")
+            return True
 
         except Exception as e:
             log(f"ERROR: {e}")
+            return False
         finally:
             browser.close()
 
