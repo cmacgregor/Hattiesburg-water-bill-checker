@@ -19,6 +19,7 @@ STREET_NAME = "lakeland"
 PAGE_TIMEOUT_MS = 60_000
 MAX_ATTEMPTS = 3
 RETRY_DELAY_SECONDS = 300
+DEBUG_SCREENSHOT = "/tmp/water-bill-debug.png"
 
 HA_URL = os.environ.get("HA_URL", "").rstrip("/")
 HA_TOKEN = os.environ.get("HA_TOKEN", "")
@@ -42,6 +43,24 @@ def notify_ha():
 
 def log(msg):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
+
+
+def log_page_state(page):
+    """Log what the browser is actually showing, to diagnose failures."""
+    try:
+        log(f"Page URL: {page.url}")
+        log(f"Page title: {page.title()!r}")
+        inputs = page.eval_on_selector_all(
+            "input, select, button",
+            "els => els.map(e => `${e.tagName.toLowerCase()} name=${e.name || ''} id=${e.id || ''} type=${e.type || ''}`)",
+        )
+        log("Form elements: " + ("; ".join(inputs) if inputs else "none"))
+        text = " ".join(page.inner_text("body").split())
+        log(f"Page text: {text[:500]}")
+        page.screenshot(path=DEBUG_SCREENSHOT, full_page=True)
+        log(f"Screenshot saved to {DEBUG_SCREENSHOT}")
+    except Exception as e:
+        log(f"Could not capture page state: {e}")
 
 
 def check_bill():
@@ -92,6 +111,7 @@ def _check_bill_once():
 
         except Exception as e:
             log(f"ERROR: {e}")
+            log_page_state(page)
             return False
         finally:
             browser.close()
