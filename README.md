@@ -1,61 +1,47 @@
-# Water Bill Checker
+# Water Bill Checker (retired)
 
-Checks the xpress-pay portal daily and sends a Home Assistant push notification when a bill is due. Silent when no bill is found.
+> **This project was retired in October 2026 and the repository is archived.**
+> It no longer works and is kept only for reference.
 
-## Setup
+## What it did
 
-### 1. Build the Docker image
+A Docker container that loaded the City of Hattiesburg water bill page on the
+Xpress-pay portal once a day in headless Chromium (Playwright), searched for the
+account by last name and street, and sent a Home Assistant push notification
+when a bill was waiting.
 
-On your Linux server, from this directory:
+## What happened
+
+In early October 2026, every daily check started failing. The investigation went
+like this:
+
+1. **Page load timeouts.** `page.goto(..., wait_until="networkidle")` timed out
+   after 30 seconds on every run. Switching to `domcontentloaded` plus waiting
+   for the form field got the page to load, but the search form never appeared.
+2. **Diagnostic logging** (URL, title, form fields, page text, screenshot on
+   failure) showed why. The browser was stuck on a Cloudflare
+   *"Just a moment… Performing security verification"* page with a Turnstile
+   challenge. Xpress-pay had put Cloudflare bot protection in front of the portal.
+3. **Decision: retire the scraper.** Getting past the check would mean disguising
+   the headless browser or paying a captcha-solving service. That works against
+   the site operator's explicit choice to block automated access, and it's an
+   arms race that would keep breaking the checker silently.
+
+## Replacement
+
+Home Assistant now watches for the utility's "bill ready" email through the
+[IMAP integration](https://www.home-assistant.io/integrations/imap/) and sends
+the same push notification with the payment link. Setup and the automation are
+in [`ha_config.yaml`](ha_config.yaml).
+
+## Shutting down the old container
+
+On the server:
 
 ```bash
-docker build -t water-bill-checker .
+docker compose down
+docker image rm ghcr.io/cmacgregor/water-bill-checker:latest
 ```
 
-### 2. Test it manually
-
-```bash
-docker run --rm water-bill-checker
-# Prints NO_BILL (exit 0) or BILL_FOUND (exit 1)
-```
-
-### 3. Add to Home Assistant
-
-Copy the contents of `ha_config.yaml` into your HA config:
-
-- The `shell_command` block goes under `shell_command:` in `configuration.yaml`
-- The `automation` block goes in `automations.yaml` or paste into the UI automation editor
-
-**Important:** Replace `mobile_app_your_phone` with your actual HA mobile device name. Find it under:
-`Settings → Companion App → your device name`
-
-It'll look something like `mobile_app_connors_pixel` or similar.
-
-### 4. Reload HA
-
-```bash
-# In HA developer tools, or:
-ha core reload
-```
-
-### 5. Test the automation
-
-Trigger it manually from HA's automation page to confirm the notification fires correctly.
-
-## How it works
-
-1. HA automation fires at 8am daily
-2. Shells out to `docker run water-bill-checker`
-3. Script loads the xpress-pay page, grabs the CSRF token, submits your name + address
-4. If redirected to a payment page → exits with code 1 → HA sends push notification
-5. If "No bills match your criteria" appears → exits with code 0 → HA does nothing
-
-## Adjusting the time
-
-Change `08:00:00` in the automation trigger to whatever time you prefer.
-
-## Troubleshooting
-
-- **Notification not firing:** Check HA logs for shell_command errors. Run the Docker container manually to confirm it's working.
-- **Docker not found by HA:** HA may need the full Docker path. Try `/usr/bin/docker` instead of `docker` in the shell_command.
-- **Form fields changed:** xpress-pay occasionally updates their portal. If it breaks, inspect the Network tab again and update the field names in `check_bill.py`.
+The original code (`check_bill.py`, `Dockerfile`, `docker-compose.yaml`) is left
+in place for reference. The original setup instructions are in the git history.
